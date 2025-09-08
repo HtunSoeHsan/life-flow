@@ -1,0 +1,64 @@
+generator master_client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/master-client"
+}
+
+datasource master_db {
+  provider = "postgresql"
+  url      = env("MASTER_DATABASE_URL")
+}
+
+// Master schema - Hospital management only
+model Hospital {
+  id            String   @id @default(cuid())
+  name          String
+  address       String
+  phone         String
+  email         String   @unique
+  licenseNo     String   @unique
+  contactPerson String
+  domain        String?  @unique // For subdomain-based access
+  subdomain     String?  @unique // For subdomain-based access
+  schemaName    String   @unique // Database schema name for this tenant
+  isActive      Boolean  @default(true)
+  settings      Json?    // Master-level settings
+  features      Json?    // Enabled features for this hospital
+  subscriptionTier String @default("basic")
+  maxUsers      Int      @default(10)
+  maxDonors     Int      @default(1000)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("hospitals")
+}
+
+// Global system settings
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String
+  value     String
+  category  String
+  isGlobal  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([key])
+  @@map("system_settings")
+}
+
+// System-wide audit logs
+model AuditLog {
+  id          String   @id @default(cuid())
+  hospitalId  String?
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String?
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+  
+  @@map("audit_logs")
+}

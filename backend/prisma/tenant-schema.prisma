@@ -1,0 +1,166 @@
+generator tenant_client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/tenant-client"
+}
+
+datasource tenant_db {
+  provider = "postgresql"
+  url      = env("TENANT_DATABASE_URL")
+}
+
+// Tenant-specific models (no Hospital model here)
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  role         String   @default("staff")
+  firstName    String
+  lastName     String
+  phone        String?
+  isActive     Boolean  @default(true)
+  permissions  Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@map("users")
+}
+
+model Donor {
+  id                    String    @id @default(cuid())
+  donorId               String    @unique @default(cuid())
+  firstName             String
+  lastName              String
+  email                 String    @unique
+  phone                 String
+  dateOfBirth           DateTime
+  gender                String
+  bloodGroup            String
+  weight                Float
+  address               String
+  occupation            String
+  emergencyContact      String
+  hasChronicDisease     Boolean   @default(false)
+  chronicDiseaseDetails String?
+  recentMedication      Boolean   @default(false)
+  isPregnant            Boolean   @default(false)
+  lastDonationDate      DateTime?
+  preferredDonationTime String?
+  notifications         Boolean   @default(true)
+  emergencyDonor        Boolean   @default(false)
+  consent               Boolean   @default(true)
+  profilePhoto          String?
+  
+  // Biometric fields
+  fingerprintHash       String?
+  fingerprintTemplate   Bytes?
+  biometricData         Json?
+  biometricVerified     Boolean   @default(false)
+  
+  isEligible            Boolean   @default(true)
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  collections           Collection[]
+  bloodUnits            BloodUnit[]
+  
+  @@map("donors")
+}
+
+model BloodUnit {
+  id                String    @id @default(cuid())
+  unitId            String    @unique
+  donorId           String
+  bloodGroup        String
+  component         String
+  collectionDate    DateTime
+  expiryDate        DateTime
+  volume            Float
+  status            String    @default("Quarantine")
+  location          String
+  temperature       Float
+  batchNumber       String
+  testResults       Json
+  crossMatchStatus  String    @default("Pending")
+  quarantineStatus  String    @default("In Quarantine")
+  reservedFor       String?
+  issuedTo          String?
+  issuedDate        DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  donor             Donor     @relation(fields: [donorId], references: [id])
+  
+  @@map("blood_units")
+}
+
+model Collection {
+  id               String   @id @default(cuid())
+  collectionId     String   @unique
+  donorId          String
+  donorName        String
+  bloodGroup       String
+  collectionDate   DateTime
+  collectionTime   String
+  volume           Float
+  collectionType   String
+  collectionMethod String
+  location         String
+  staff            String
+  status           String   @default("Scheduled")
+  currentStep      Int      @default(1)
+  bagNumber        String
+  temperature      Float?
+  qualityChecks    Json
+  testingStatus    Json
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  donor            Donor    @relation(fields: [donorId], references: [id])
+  
+  @@map("collections")
+}
+
+model Distribution {
+  id             String   @id @default(cuid())
+  distributionId String   @unique
+  bloodUnitId    String
+  requestDate    DateTime
+  issueDate      DateTime?
+  quantity       Float
+  purpose        String
+  urgency        String
+  status         String   @default("Requested")
+  approvedBy     String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("distributions")
+}
+
+model BiometricLog {
+  id           String   @id @default(cuid())
+  donorId      String
+  action       String
+  success      Boolean
+  confidence   Float?
+  timestamp    DateTime @default(now())
+  metadata     Json?
+  
+  @@map("biometric_logs")
+}
+
+// Tenant-specific settings
+model Settings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("settings")
+}
