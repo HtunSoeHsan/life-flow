@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Card, 
   Row, 
@@ -58,11 +58,11 @@ const { TextArea } = Input;
 interface BloodRequest {
   key: number;
   requestId: string;
-  hospitalId: string;
+  requestingHospitalId: string;
+  targetHospitalId: string;
   hospitalName: string;
   contactPerson: string;
   contactPhone: string;
-  bloodGroup: string;
   component: string;
   unitsRequested: number;
   unitsIssued: number;
@@ -71,15 +71,55 @@ interface BloodRequest {
   requiredBy: string;
   status: 'Pending' | 'Approved' | 'Partially Fulfilled' | 'Completed' | 'Cancelled' | 'Delivered';
   purpose: string;
-  patientInfo: string;
-  issuedUnits: string[];
   deliveryMethod: string;
   notes: string;
 }
 
-export default function IssueDistribution() {
-  const { distributions, loading, error, createDistribution, issueBloodUnits, cancelDistribution } = useDistributions();
-  const { stats, loading: statsLoading } = useDistributionStats();
+interface IssueDistributionProps {
+  hospitalId?: string;
+}
+
+export default function IssueDistribution({ hospitalId: propHospitalId }: IssueDistributionProps) {
+  const [hospitalId, setHospitalId] = useState<string>('');
+  const [hospitals, setHospitals] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const getHospitalId = () => {
+      if (propHospitalId) return propHospitalId;
+      
+      try {
+        const auth = localStorage.getItem('auth');
+        if (auth) {
+          const authData = JSON.parse(auth);
+          return authData.user?.hospitalId || 'default-hospital';
+        }
+      } catch (error) {
+        console.error('Error parsing auth data:', error);
+      }
+      
+      return 'default-hospital';
+    };
+    
+    setHospitalId(getHospitalId());
+    
+    // Fetch hospitals
+    const fetchHospitals = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/hospitals');
+        const data = await response.json();
+        if (data.success) {
+          setHospitals(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch hospitals:', error);
+      }
+    };
+    
+    fetchHospitals();
+  }, [propHospitalId]);
+  
+  const { distributions, myRequests, loading, error, createDistribution, issueBloodUnits, cancelDistribution } = useDistributions({ hospitalId });
+  const { stats, loading: statsLoading } = useDistributionStats(hospitalId);
   const [showNewRequest, setShowNewRequest] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showRequestDetails, setShowRequestDetails] = useState(false);
@@ -88,6 +128,14 @@ export default function IssueDistribution() {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
   const [issueForm] = Form.useForm();
+  
+  // Search and filter states
+  const [searchText, setSearchText] = useState('');
+  const [hospitalFilter, setHospitalFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [urgencyFilter, setUrgencyFilter] = useState('');
+  const [myRequestsSearchText, setMyRequestsSearchText] = useState('');
+  const [myRequestsStatusFilter, setMyRequestsStatusFilter] = useState('');
 
   const handleNewRequest = async (values: any) => {
     try {
@@ -97,9 +145,10 @@ export default function IssueDistribution() {
         quantity: values.quantity,
         purpose: values.purpose,
         urgency: values.urgency,
-        hospitalId: values.hospitalId,
+        requestingHospitalId: hospitalId,
+        targetHospitalId: values.targetHospitalId,
         contactPerson: values.contactPerson,
-        notes: values.notes
+        ...(values.notes && { notes: values.notes })
       };
       
       await createDistribution(requestData);
@@ -118,9 +167,8 @@ export default function IssueDistribution() {
       setSubmitting(true);
       if (selectedRequest) {
         await issueBloodUnits(selectedRequest.requestId, {
-          bloodUnitIds: values.bloodUnitIds,
-          issuedBy: values.issuedBy,
-          deliveryMethod: values.deliveryMethod,
+          issuedBy: values.issuedBy || 'System',
+          deliveryMethod: values.deliveryMethod || 'Hospital Pickup',
           notes: values.notes
         });
         message.success('Blood units issued successfully');
@@ -133,6 +181,87 @@ export default function IssueDistribution() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePrintReceipt = (record: BloodRequest) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      message.error('Please allow popups to print receipt');
+      return;
+    }
+
+    const receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Distribution Receipt - ${record.requestId}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .section { margin-bottom: 15px; }
+            .label { font-weight: bold; display: inline-block; width: 150px; }
+            .status { padding: 5px 10px; border-radius: 3px; color: white; }
+            .status.pending { background-color: #faad14; }
+            .status.completed { background-color: #52c41a; }
+            .status.cancelled { background-color: #ff4d4f; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>Blood Distribution Receipt</h2>
+            <p>LifeFlow Blood Bank Management System</p>
+          </div>
+          
+          <div class="section">
+            <div><span class="label">Request ID:</span> ${record.requestId}</div>
+            <div><span class="label">Date:</span> ${dayjs(record.requestDate).format('DD MMM YYYY HH:mm')}</div>
+            <div><span class="label">Status:</span> <span class="status ${record.status.toLowerCase()}">${record.status}</span></div>
+          </div>
+          
+          <div class="section">
+            <h3>Hospital Information</h3>
+            <div><span class="label">Hospital:</span> ${record.hospitalName}</div>
+            <div><span class="label">Contact Person:</span> ${record.contactPerson}</div>
+            <div><span class="label">Phone:</span> ${record.contactPhone}</div>
+          </div>
+          
+          <div class="section">
+            <h3>Request Details</h3>
+            <div><span class="label">Component:</span> ${record.component}</div>
+            <div><span class="label">Quantity:</span> ${record.unitsRequested} units</div>
+            <div><span class="label">Issued:</span> ${record.unitsIssued} units</div>
+            <div><span class="label">Purpose:</span> ${record.purpose}</div>
+            <div><span class="label">Urgency:</span> ${record.urgency}</div>
+            <div><span class="label">Delivery:</span> ${record.deliveryMethod}</div>
+          </div>
+          
+          ${record.notes ? `
+          <div class="section">
+            <h3>Notes</h3>
+            <p>${record.notes}</p>
+          </div>
+          ` : ''}
+          
+          <div class="section" style="margin-top: 30px; text-align: center; font-size: 12px; color: #666;">
+            <p>Generated on ${dayjs().format('DD MMM YYYY HH:mm')}</p>
+            <p>This is a computer-generated receipt</p>
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() {
+                window.close();
+              };
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(receiptHTML);
+    printWindow.document.close();
   };
 
   if (loading) {
@@ -153,81 +282,84 @@ export default function IssueDistribution() {
       />
     );
   }
-
-  // Mock data for demo if no real data
-  const mockRequests = distributions.length === 0 ? [
-    {
-      key: 1,
-      requestId: 'REQ2024001',
-      hospitalId: 'H001',
-      hospitalName: 'City General Hospital',
-      contactPerson: 'Dr. Wilson',
-      contactPhone: '+1234567890',
-      bloodGroup: 'O-',
-      component: 'Whole Blood',
-      unitsRequested: 3,
-      unitsIssued: 2,
-      urgency: 'Emergency' as const,
-      requestDate: '2024-01-15',
-      requiredBy: '2024-01-15',
-      status: 'Partially Fulfilled' as const,
-      purpose: 'Emergency Surgery',
-      patientInfo: 'Patient ID: P12345, Age: 45, Male',
-      issuedUnits: ['BU2024001', 'BU2024002'],
+console.log("distributions", distributions);
+  // Transform API data to component format
+  const incomingRequests = distributions.map((d: any, index: number) => {
+    const requestingHospital = hospitals.find(h => h.id === d.requestingHospitalId);
+    return {
+      key: index + 1,
+      requestId: d.distributionId,
+      requestingHospitalId: d.requestingHospitalId,
+      targetHospitalId: d.targetHospitalId,
+      hospitalName: requestingHospital?.name || 'Unknown Hospital',
+      contactPerson: d.contactPerson,
+      contactPhone: requestingHospital?.phone || 'N/A',
+      component: 'Blood Unit',
+      unitsRequested: d.quantity,
+      unitsIssued: d.status === 'Issued' ? d.quantity : 0,
+      urgency: d.urgency,
+      requestDate: d.requestDate,
+      requiredBy: d.requestDate,
+      status: d.status === 'Requested' ? 'Pending' : d.status === 'Issued' ? 'Completed' : d.status,
+      purpose: d.purpose,
       deliveryMethod: 'Hospital Pickup',
-      notes: 'Critical patient, requires immediate attention'
-    },
-    {
-      key: 2,
-      requestId: 'REQ2024002',
-      hospitalId: 'H002',
-      hospitalName: 'Regional Medical Center',
-      contactPerson: 'Dr. Johnson',
-      contactPhone: '+1234567891',
-      bloodGroup: 'A+',
-      component: 'Platelets',
-      unitsRequested: 2,
-      unitsIssued: 2,
-      urgency: 'Routine' as const,
-      requestDate: '2024-01-14',
-      requiredBy: '2024-01-16',
-      status: 'Completed' as const,
-      purpose: 'Scheduled Surgery',
-      patientInfo: 'Patient ID: P12346, Age: 32, Female',
-      issuedUnits: ['BU2024003', 'BU2024004'],
-      deliveryMethod: 'Courier Service',
-      notes: 'Standard procedure'
-    }
-  ] : distributions.map((d: any, index: number) => ({
-    key: index + 1,
-    requestId: d.distributionId || `REQ${index + 1}`,
-    hospitalId: d.hospitalId || 'H001',
-    hospitalName: d.hospitalName || 'Unknown Hospital',
-    contactPerson: d.contactPerson || 'Unknown',
-    contactPhone: d.contactPhone || 'N/A',
-    bloodGroup: d.bloodGroup || 'Unknown',
-    component: d.component || 'Whole Blood',
-    unitsRequested: d.quantity || 1,
-    unitsIssued: d.status === 'Issued' ? d.quantity || 1 : 0,
-    urgency: d.urgency || 'Routine',
-    requestDate: d.requestDate || new Date().toISOString(),
-    requiredBy: d.requiredBy || new Date().toISOString(),
-    status: d.status === 'Requested' ? 'Pending' : d.status === 'Issued' ? 'Completed' : d.status || 'Pending',
-    purpose: d.purpose || 'Medical Treatment',
-    patientInfo: d.patientInfo || 'N/A',
-    issuedUnits: d.issuedUnits || [],
-    deliveryMethod: d.deliveryMethod || 'Hospital Pickup',
-    notes: d.notes || ''
-  }));
+      notes: d.notes || ''
+    };
+  });
 
-  const displayRequests = mockRequests;
+  // Filter incoming requests
+  const filteredIncomingRequests = incomingRequests.filter((req: any) => {
+    const matchesSearch = searchText === '' || 
+      req.requestId?.toLowerCase().includes(searchText.toLowerCase()) ||
+      req.hospitalName?.toLowerCase().includes(searchText.toLowerCase()) ||
+      req.contactPerson?.toLowerCase().includes(searchText.toLowerCase());
+    
+    const matchesHospital = hospitalFilter === '' || req.requestingHospitalId === hospitalFilter;
+    const matchesStatus = statusFilter === '' || req.status?.toLowerCase() === statusFilter.toLowerCase();
+    const matchesUrgency = urgencyFilter === '' || req.urgency?.toLowerCase() === urgencyFilter.toLowerCase();
+    
+    return matchesSearch && matchesHospital && matchesStatus && matchesUrgency;
+  });
+  
+  // Filter my requests
+  const filteredMyRequests = myRequests.map((d: any, index: number) => {
+    const targetHospital = hospitals.find(h => h.id === d.targetHospitalId);
+    return {
+      key: index + 1,
+      requestId: d.distributionId,
+      requestingHospitalId: d.requestingHospitalId,
+      targetHospitalId: d.targetHospitalId,
+      hospitalName: targetHospital?.name || 'Unknown Hospital',
+      contactPerson: d.contactPerson || 'Unknown',
+      contactPhone: 'N/A',
+      component: 'Blood Unit',
+      unitsRequested: d.quantity || 1,
+      unitsIssued: d.status === 'Issued' ? d.quantity || 1 : 0,
+      urgency: d.urgency,
+      requestDate: d.requestDate,
+      requiredBy: d.requestDate,
+      status: d.status === 'Requested' ? 'Pending' : d.status === 'Issued' ? 'Completed' : d.status,
+      purpose: d.purpose,
+      deliveryMethod: 'Hospital Pickup',
+      notes: d.notes || ''
+    };
+  }).filter((req: any) => {
+    const matchesSearch = myRequestsSearchText === '' || 
+      req.requestId?.toLowerCase().includes(myRequestsSearchText.toLowerCase()) ||
+      req.hospitalName?.toLowerCase().includes(myRequestsSearchText.toLowerCase());
+    
+    const matchesStatus = myRequestsStatusFilter === '' || req.status?.toLowerCase() === myRequestsStatusFilter.toLowerCase();
+    
+    return matchesSearch && matchesStatus;
+  });
+  
   const displayStats = statsLoading ? { total: 0, pending: 0, emergency: 0, completed: 0 } : stats;
   
   // Statistics
-  const totalRequests = displayStats.total || displayRequests.length;
-  const pendingRequests = displayStats.pending || displayRequests.filter((r: any) => r.status === 'Pending').length;
-  const emergencyRequests = displayStats.emergency || displayRequests.filter((r: any) => r.urgency === 'Emergency').length;
-  const completedRequests = displayStats.completed || displayRequests.filter((r: any) => r.status === 'Completed').length;
+  const totalRequests = displayStats.total || incomingRequests.length;
+  const pendingRequests = displayStats.pending || incomingRequests.filter((r: any) => r.status === 'Pending').length;
+  const emergencyRequests = displayStats.emergency || incomingRequests.filter((r: any) => r.urgency === 'Emergency' && r.status !== 'Completed' && r.status !== 'Cancelled').length;
+  const completedRequests = displayStats.completed || incomingRequests.filter((r: any) => r.status === 'Completed').length;
 
   const getUrgencyColor = (urgency: string): string => {
     const colors: Record<string, string> = {
@@ -263,19 +395,21 @@ export default function IssueDistribution() {
           </div>
           <div className="text-sm text-gray-500">{dayjs(record.requestDate).format('DD MMM YY')}</div>
           <div className="flex items-center space-x-2 mt-1">
-            <Tag color="red" >{record.bloodGroup}</Tag>
-            <Tag color="blue" >{record.component}</Tag>
+            <Tag color="blue">{record.component}</Tag>
           </div>
         </div>
       ),
     },
     {
-      title: 'Hospital',
+      title: 'Hospital Info',
       key: 'hospital',
       width: 200,
       render: (record: BloodRequest) => (
         <div>
-          <div className="font-medium">{record.hospitalName}</div>
+          <div className="font-medium">
+            {activeTab === 'requests' ? 'From: ' : 'To: '}
+            {record.hospitalName}
+          </div>
           <div className="text-sm text-gray-500">{record.contactPerson}</div>
           <div className="text-sm text-gray-500">{record.contactPhone}</div>
         </div>
@@ -348,7 +482,7 @@ export default function IssueDistribution() {
           >
             View Details
           </Button>
-          {record.status === 'Pending' && (
+          {record.status === 'Pending' && activeTab === 'requests' && (
             <Button 
               type="link" 
               size="small"
@@ -360,7 +494,11 @@ export default function IssueDistribution() {
               Issue Blood
             </Button>
           )}
-          <Button type="link" size="small">
+          <Button 
+            type="link" 
+            size="small"
+            onClick={() => handlePrintReceipt(record)}
+          >
             Print Receipt
           </Button>
         </Space>
@@ -421,42 +559,63 @@ export default function IssueDistribution() {
           description={`${emergencyRequests} emergency blood requests require immediate attention.`}
           type="error"
           showIcon
-          action={
-            <Button size="small" type="primary" danger>
-              View Emergency Requests
-            </Button>
-          }
           closable
         />
       )}
 
       <Tabs activeKey={activeTab} onChange={(key: string) => setActiveTab(key)}>
-        <TabPane tab="Blood Requests" key="requests">
+        <TabPane tab="Incoming Requests" key="requests">
           <Card>
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center space-x-4">
                 <Input
                   placeholder="Search requests..."
                   prefix={<SearchOutlined />}
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
                   style={{ width: 250 }}
                 />
-                <Select placeholder="Hospital" style={{ width: 200 }}>
-                  <Option value="h001">City General Hospital</Option>
-                  <Option value="h002">Regional Medical Center</Option>
-                  <Option value="h003">Children's Hospital</Option>
+                <Select 
+                  placeholder="Hospital" 
+                  value={hospitalFilter || undefined}
+                  onChange={setHospitalFilter}
+                  allowClear
+                  style={{ width: 200 }}
+                >
+                  {hospitals.filter(h => h.id !== hospitalId).map(hospital => (
+                    <Option key={hospital.id} value={hospital.id}>
+                      {hospital.name}
+                    </Option>
+                  ))}
                 </Select>
-                <Select placeholder="Status" style={{ width: 120 }}>
+                <Select 
+                  placeholder="Status" 
+                  value={statusFilter || undefined}
+                  onChange={setStatusFilter}
+                  allowClear
+                  style={{ width: 120 }}
+                >
                   <Option value="pending">Pending</Option>
                   <Option value="approved">Approved</Option>
                   <Option value="completed">Completed</Option>
+                  <Option value="cancelled">Cancelled</Option>
                 </Select>
-                <Select placeholder="Urgency" style={{ width: 120 }}>
+                <Select 
+                  placeholder="Urgency" 
+                  value={urgencyFilter || undefined}
+                  onChange={setUrgencyFilter}
+                  allowClear
+                  style={{ width: 120 }}
+                >
                   <Option value="emergency">Emergency</Option>
                   <Option value="urgent">Urgent</Option>
                   <Option value="routine">Routine</Option>
                 </Select>
               </div>
               <div className="flex items-center space-x-2">
+                <span className="text-gray-500">
+                  Showing {filteredIncomingRequests.length} of {incomingRequests.length} requests
+                </span>
                 <Button icon={<ExportOutlined />}>Export</Button>
                 <Button 
                   type="primary" 
@@ -471,10 +630,53 @@ export default function IssueDistribution() {
 
             <Table
               columns={columns}
-              dataSource={displayRequests}
+              dataSource={filteredIncomingRequests}
               pagination={{
                 pageSize: 10,
                 showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} requests`,
+              }}
+            />
+          </Card>
+        </TabPane>
+
+        <TabPane tab="My Requests" key="my-requests">
+          <Card>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center space-x-4">
+                <h4>Requests I Made to Other Hospitals</h4>
+                <Input
+                  placeholder="Search my requests..."
+                  prefix={<SearchOutlined />}
+                  value={myRequestsSearchText}
+                  onChange={(e) => setMyRequestsSearchText(e.target.value)}
+                  style={{ width: 250 }}
+                />
+                <Select 
+                  placeholder="Status" 
+                  value={myRequestsStatusFilter || undefined}
+                  onChange={setMyRequestsStatusFilter}
+                  allowClear
+                  style={{ width: 120 }}
+                >
+                  <Option value="pending">Pending</Option>
+                  <Option value="approved">Approved</Option>
+                  <Option value="completed">Completed</Option>
+                  <Option value="cancelled">Cancelled</Option>
+                </Select>
+              </div>
+              <span className="text-gray-500">
+                Showing {filteredMyRequests.length} of {myRequests.length} requests
+              </span>
+            </div>
+            <Table
+              columns={columns}
+              dataSource={filteredMyRequests}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showQuickJumper: true,
                 showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} requests`,
               }}
             />
@@ -578,14 +780,16 @@ export default function IssueDistribution() {
         width={800}
       >
         <Form layout="vertical" form={form} onFinish={handleNewRequest}>
-          <Divider orientation="left">Hospital Information</Divider>
+          <Divider orientation="left">Request Information</Divider>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item label="Hospital" name="hospitalId" required>
-                <Select placeholder="Select hospital">
-                  <Option value="h001">City General Hospital</Option>
-                  <Option value="h002">Regional Medical Center</Option>
-                  <Option value="h003">Children's Hospital</Option>
+              <Form.Item label="Request From Hospital" name="targetHospitalId" required>
+                <Select placeholder="Select hospital to request from">
+                  {hospitals.filter(h => h.id !== hospitalId).map(hospital => (
+                    <Option key={hospital.id} value={hospital.id}>
+                      {hospital.name}
+                    </Option>
+                  ))}
                 </Select>
               </Form.Item>
             </Col>
@@ -648,10 +852,10 @@ export default function IssueDistribution() {
 
           <Form.Item label="Purpose" name="purpose" required>
             <Select placeholder="Select purpose">
-              <Option value="surgery">Surgery</Option>
-              <Option value="emergency">Emergency Treatment</Option>
-              <Option value="transfusion">Blood Transfusion</Option>
-              <Option value="research">Research</Option>
+              <Option value="Surgery">Surgery</Option>
+              <Option value="Emergency Treatment">Emergency Treatment</Option>
+              <Option value="Blood Transfusion">Blood Transfusion</Option>
+              <Option value="Research">Research</Option>
             </Select>
           </Form.Item>
 
@@ -682,41 +886,26 @@ export default function IssueDistribution() {
           <div className="space-y-4">
             <Alert
               message={`Processing request for ${selectedRequest.hospitalName}`}
-              description={`${selectedRequest.unitsRequested} units of ${selectedRequest.bloodGroup} ${selectedRequest.component} required`}
+              description={`${selectedRequest.unitsRequested} units of ${selectedRequest.component} required`}
               type="info"
               showIcon
             />
             
             <Form layout="vertical" form={issueForm} onFinish={handleIssueBlood}>
-              <Form.Item label="Available Blood Units" name="bloodUnitIds">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 border rounded">
-                    <div>
-                      <span className="font-medium">BU2024005</span>
-                      <span className="ml-2 text-gray-500">450ml • Expires: 2024-02-20</span>
-                    </div>
-                    <Button type="primary" size="small">Select</Button>
-                  </div>
-                  <div className="flex items-center justify-between p-3 border rounded">
-                    <div>
-                      <span className="font-medium">BU2024006</span>
-                      <span className="ml-2 text-gray-500">450ml • Expires: 2024-02-18</span>
-                    </div>
-                    <Button type="primary" size="small">Select</Button>
-                  </div>
-                </div>
+              <Form.Item label="Issued By" name="issuedBy" rules={[{ required: true, message: 'Please enter who is issuing the blood' }]}>
+                <Input placeholder="Enter staff name or ID" />
               </Form.Item>
 
-              <Form.Item label="Delivery Method" name="deliveryMethod">
-                <Radio.Group defaultValue="pickup">
-                  <Radio value="pickup">Hospital Pickup</Radio>
-                  <Radio value="courier">Courier Service</Radio>
-                  <Radio value="emergency">Emergency Transport</Radio>
+              <Form.Item label="Delivery Method" name="deliveryMethod" rules={[{ required: true, message: 'Please select delivery method' }]}>
+                <Radio.Group>
+                  <Radio value="Hospital Pickup">Hospital Pickup</Radio>
+                  <Radio value="Courier Service">Courier Service</Radio>
+                  <Radio value="Emergency Transport">Emergency Transport</Radio>
                 </Radio.Group>
               </Form.Item>
 
               <Form.Item label="Notes" name="notes">
-                <TextArea rows={3} placeholder="Any special handling instructions" />
+                <TextArea rows={3} placeholder="Any special handling instructions or notes" />
               </Form.Item>
 
               <div className="flex justify-end space-x-2">
@@ -768,19 +957,13 @@ export default function IssueDistribution() {
 
             <Card title="Blood Requirements" size="small">
               <Row gutter={16}>
-                <Col span={8}>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-600">{selectedRequest.bloodGroup}</div>
-                    <div className="text-sm text-gray-500">Blood Group</div>
-                  </div>
-                </Col>
-                <Col span={8}>
+                <Col span={12}>
                   <div className="text-center">
                     <div className="text-lg font-semibold">{selectedRequest.component}</div>
                     <div className="text-sm text-gray-500">Component</div>
                   </div>
                 </Col>
-                <Col span={8}>
+                <Col span={12}>
                   <div className="text-center">
                     <div className="text-lg font-semibold">
                       {selectedRequest.unitsIssued}/{selectedRequest.unitsRequested}
@@ -791,24 +974,7 @@ export default function IssueDistribution() {
               </Row>
             </Card>
 
-            {selectedRequest.patientInfo && (
-              <Card title="Patient Information" size="small">
-                <p>{selectedRequest.patientInfo}</p>
-              </Card>
-            )}
 
-            {selectedRequest.issuedUnits.length > 0 && (
-              <Card title="Issued Units" size="small">
-                <div className="space-y-2">
-                  {selectedRequest.issuedUnits.map((unitId, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 border rounded">
-                      <span className="font-medium">{unitId}</span>
-                      <Tag color="green">Issued</Tag>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
 
             {selectedRequest.notes && (
               <Card title="Notes" size="small">

@@ -20,7 +20,7 @@ export class DistributionDAO extends AbstractBaseDAO<Distribution, string> {
   }
 
   public async findById(id: string): Promise<Distribution | null> {
-    return await (this.prisma as any).distribution.findUnique({ where: { id } });
+    return await (this.prisma as any).distribution.findUnique({ where: { distributionId: id } });
   }
 
   public async findAll(options?: QueryOptions): Promise<Distribution[]> {
@@ -28,16 +28,19 @@ export class DistributionDAO extends AbstractBaseDAO<Distribution, string> {
   }
 
   public async create(data: any): Promise<Distribution> {
-    return await (this.prisma as any).distribution.create({ data });
+    console.log('Creating distribution with data:', data);
+    const result = await (this.prisma as any).distribution.create({ data });
+    console.log('Created distribution:', result);
+    return result;
   }
 
   public async update(id: string, data: any): Promise<Distribution | null> {
-    return await (this.prisma as any).distribution.update({ where: { id }, data });
+    return await (this.prisma as any).distribution.update({ where: { distributionId: id }, data });
   }
 
   public async delete(id: string): Promise<boolean> {
     try {
-      await (this.prisma as any).distribution.delete({ where: { id } });
+      await (this.prisma as any).distribution.delete({ where: { distributionId: id } });
       return true;
     } catch (error) {
       console.error('Error deleting distribution:', error);
@@ -90,10 +93,15 @@ export class DistributionDAO extends AbstractBaseDAO<Distribution, string> {
    */
   public async getStats(): Promise<DistributionStats> {
     const [total, pending, emergency, completed] = await Promise.all([
-      this.count(),
-      this.count({ where: { status: 'Requested' } }),
-      this.count({ where: { urgency: 'Emergency' } }),
-      this.count({ where: { status: 'Issued' } })
+      (this.prisma as any).distribution.count(),
+      (this.prisma as any).distribution.count({ where: { status: 'Requested' } }),
+      (this.prisma as any).distribution.count({ 
+        where: { 
+          urgency: 'Emergency',
+          status: { notIn: ['Issued', 'Cancelled'] }
+        } 
+      }),
+      (this.prisma as any).distribution.count({ where: { status: 'Issued' } })
     ]);
 
     return { total, pending, emergency, completed };

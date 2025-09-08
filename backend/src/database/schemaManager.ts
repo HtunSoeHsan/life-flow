@@ -113,6 +113,13 @@ export class SchemaManager {
   }
 
   /**
+   * Get master database client
+   */
+  public getMasterClient(): MasterPrismaClient {
+    return new MasterPrismaClient();
+  }
+
+  /**
    * Close all tenant connections
    */
   public async closeAllConnections(): Promise<void> {

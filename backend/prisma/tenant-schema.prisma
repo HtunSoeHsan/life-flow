@@ -124,19 +124,22 @@ model Collection {
 }
 
 model Distribution {
-  id             String   @id @default(cuid())
-  distributionId String   @unique
-  bloodUnitId    String
-  requestDate    DateTime
-  issueDate      DateTime?
-  quantity       Float
-  purpose        String
-  urgency        String
-  status         String   @default("Requested")
-  approvedBy     String?
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  distributionId       String   @unique
+  bloodUnitId          String
+  requestDate          DateTime
+  issueDate            DateTime?
+  quantity             Float
+  purpose              String
+  urgency              String
+  status               String   @default("Requested")
+  requestingHospitalId String?
+  targetHospitalId     String?
+  contactPerson        String?
+  approvedBy           String?
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
   
   @@map("distributions")
 }

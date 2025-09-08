@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Layout, Menu, Card, Row, Col, Statistic, Button, message, Table, Modal, Form, Input, Select } from 'antd';
+import { Layout, Menu, Card, Row, Col, Statistic, Button, message, Table, Modal, Form, Input, Select, Space } from 'antd';
 import { 
   DashboardOutlined, 
   BankOutlined, 
@@ -12,7 +12,9 @@ import {
   EditOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  UserOutlined
+  UserOutlined,
+  SearchOutlined,
+  FilterOutlined
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 
@@ -36,6 +38,13 @@ export default function AdminDashboard() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetPasswordForm] = Form.useForm();
   const [selectedHospitalForUsers, setSelectedHospitalForUsers] = useState(null);
+  
+  // Search and filter states
+  const [hospitalSearchText, setHospitalSearchText] = useState('');
+  const [hospitalStatusFilter, setHospitalStatusFilter] = useState('all');
+  const [userSearchText, setUserSearchText] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userStatusFilter, setUserStatusFilter] = useState('all');
 
   const fetchHospitalUsers = async (hospitalId: string) => {
     try {
@@ -195,6 +204,27 @@ export default function AdminDashboard() {
     router.push('/login');
   };
 
+  // Filtered data
+  const filteredHospitals = hospitals.filter((hospital: any) => {
+    const matchesSearch = hospital.name.toLowerCase().includes(hospitalSearchText.toLowerCase()) ||
+                         hospital.address.toLowerCase().includes(hospitalSearchText.toLowerCase());
+    const matchesStatus = hospitalStatusFilter === 'all' || 
+                         (hospitalStatusFilter === 'active' && hospital.isActive) ||
+                         (hospitalStatusFilter === 'inactive' && !hospital.isActive);
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredUsers = hospitalUsers.filter((user: any) => {
+    const matchesSearch = user.firstName.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                         user.lastName.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                         user.email.toLowerCase().includes(userSearchText.toLowerCase());
+    const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
+    const matchesStatus = userStatusFilter === 'all' || 
+                         (userStatusFilter === 'active' && user.isActive) ||
+                         (userStatusFilter === 'inactive' && !user.isActive);
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
   const menuItems = [
     { key: 'dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
     { key: 'hospitals', icon: <BankOutlined />, label: 'Hospital Management' },
@@ -276,12 +306,42 @@ export default function AdminDashboard() {
             </div>
             
             <Card>
+              <div className="mb-4 flex justify-between items-center">
+                <Space size="middle">
+                  <Input
+                    placeholder="Search hospitals..."
+                    prefix={<SearchOutlined />}
+                    value={hospitalSearchText}
+                    onChange={(e) => setHospitalSearchText(e.target.value)}
+                    style={{ width: 300 }}
+                  />
+                  <Select
+                    placeholder="Filter by status"
+                    value={hospitalStatusFilter}
+                    onChange={setHospitalStatusFilter}
+                    style={{ width: 150 }}
+                  >
+                    <Select.Option value="all">All Status</Select.Option>
+                    <Select.Option value="active">Active</Select.Option>
+                    <Select.Option value="inactive">Inactive</Select.Option>
+                  </Select>
+                </Space>
+                <span className="text-gray-500">
+                  Showing {filteredHospitals.length} of {hospitals.length} hospitals
+                </span>
+              </div>
+              
               <Table
                 columns={hospitalColumns}
-                dataSource={hospitals}
+                dataSource={filteredHospitals}
                 loading={loading}
                 rowKey="id"
-                pagination={{ pageSize: 10 }}
+                pagination={{ 
+                  pageSize: 10,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} hospitals`
+                }}
               />
             </Card>
           </div>
@@ -366,6 +426,41 @@ export default function AdminDashboard() {
             </Card>
             
             <Card className="border-0 shadow-sm">
+              <div className="mb-4 flex justify-between items-center">
+                <Space size="middle">
+                  <Input
+                    placeholder="Search users..."
+                    prefix={<SearchOutlined />}
+                    value={userSearchText}
+                    onChange={(e) => setUserSearchText(e.target.value)}
+                    style={{ width: 300 }}
+                  />
+                  <Select
+                    placeholder="Filter by role"
+                    value={userRoleFilter}
+                    onChange={setUserRoleFilter}
+                    style={{ width: 120 }}
+                  >
+                    <Select.Option value="all">All Roles</Select.Option>
+                    <Select.Option value="admin">Admin</Select.Option>
+                    <Select.Option value="staff">Staff</Select.Option>
+                  </Select>
+                  <Select
+                    placeholder="Filter by status"
+                    value={userStatusFilter}
+                    onChange={setUserStatusFilter}
+                    style={{ width: 120 }}
+                  >
+                    <Select.Option value="all">All Status</Select.Option>
+                    <Select.Option value="active">Active</Select.Option>
+                    <Select.Option value="inactive">Inactive</Select.Option>
+                  </Select>
+                </Space>
+                <span className="text-gray-500">
+                  Showing {filteredUsers.length} of {hospitalUsers.length} users
+                </span>
+              </div>
+              
               <Table
                 columns={[
                   { 
@@ -462,7 +557,7 @@ export default function AdminDashboard() {
                     width: '10%'
                   }
                 ]}
-                dataSource={hospitalUsers}
+                dataSource={filteredUsers}
                 loading={loading}
                 rowKey="id"
                 pagination={{ 
@@ -526,7 +621,7 @@ export default function AdminDashboard() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider trigger={null} collapsible collapsed={collapsed} width={250}>
         <div className="p-4 text-white text-center font-bold">
           {collapsed ? 'LF' : 'LifeFlow Admin'}
         </div>

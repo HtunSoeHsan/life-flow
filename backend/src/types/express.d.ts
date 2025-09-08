@@ -7,6 +7,7 @@ declare global {
         name: string;
       };
       hospitalId?: string;
+      distributionController?: any;
     }
   }
 }

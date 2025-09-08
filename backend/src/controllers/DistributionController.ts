@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '.prisma/tenant-client';
 import { DistributionDAO } from '../dao/DistributionDAO';
+import SchemaManager from '../database/schemaManager';
+
+const schemaManager = SchemaManager.getInstance();
 
 /**
  * DistributionController for managing blood distribution requests using DAO pattern
@@ -55,15 +58,16 @@ export class DistributionController {
         quantity,
         purpose,
         urgency,
-        hospitalId,
+        requestingHospitalId,
+        targetHospitalId,
         contactPerson,
         notes
       } = req.body;
 
       // Validate required fields
-      if (!quantity || !purpose || !urgency) {
+      if (!quantity || !purpose || !urgency || !targetHospitalId) {
         res.status(400).json({
-          error: 'Missing required fields: quantity, purpose, urgency'
+          error: 'Missing required fields: quantity, purpose, urgency, targetHospitalId'
         });
         return;
       }
@@ -71,15 +75,22 @@ export class DistributionController {
       // Generate unique distribution ID
       const distributionId = `DIST${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
-      const newDistribution = await this.dao.create({
-        distributionId,
-        bloodUnitId: bloodUnitId || `UNIT${Date.now()}`,
-        requestDate: new Date(),
-        quantity: parseFloat(quantity),
-        purpose,
-        urgency,
-        status: 'Requested',
-        notes
+      // Use tenant client directly
+      const tenantClient = schemaManager.getTenantClient(targetHospitalId);
+      const newDistribution = await tenantClient.distribution.create({
+        data: {
+          distributionId,
+          bloodUnitId: bloodUnitId || `UNIT${Date.now()}`,
+          requestDate: new Date(),
+          quantity: parseFloat(quantity),
+          purpose,
+          urgency,
+          status: 'Requested',
+          requestingHospitalId: requestingHospitalId || req.hospitalId,
+          targetHospitalId,
+          contactPerson,
+          notes: notes || null
+        }
       });
 
       res.status(201).json({
@@ -209,6 +220,56 @@ export class DistributionController {
       });
     } catch (error) {
       console.error('Error fetching distribution stats:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Get requests made by this hospital (stored in other hospitals' databases)
+   */
+  public async getMyRequests(req: Request, res: Response): Promise<void> {
+    try {
+      const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
+      
+      if (!hospitalId) {
+        res.status(400).json({ error: 'Hospital ID required' });
+        return;
+      }
+
+      // Get all hospitals from master database
+      const masterClient = schemaManager.getMasterClient();
+      const hospitals = await masterClient.hospital.findMany({ where: { isActive: true } });
+      
+      let allMyRequests: any[] = [];
+      
+      // Search in each hospital's database for requests made by this hospital
+      for (const hospital of hospitals) {
+        try {
+          const tenantClient = schemaManager.getTenantClient(hospital.id);
+          const requests = await tenantClient.distribution.findMany({
+            where: { requestingHospitalId: hospitalId },
+            orderBy: { createdAt: 'desc' }
+          });
+          allMyRequests = allMyRequests.concat(requests);
+        } catch (error) {
+          console.error(`Error fetching from hospital ${hospital.id}:`, error);
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          distributions: allMyRequests,
+          pagination: {
+            page: 1,
+            limit: allMyRequests.length,
+            total: allMyRequests.length,
+            pages: 1
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching my requests:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

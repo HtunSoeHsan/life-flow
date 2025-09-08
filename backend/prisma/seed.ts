@@ -283,6 +283,7 @@ async function main() {
     console.log(`✅ Created collections for ${hospital.name}:`, collections.map(c => c.collectionId));
 
     // Create distributions for this hospital
+    const otherHospitalId = hospitals.find(h => h.id !== hospital.id)?.id || hospital.id;
     const distributions = await Promise.all([
     tenantClient.distribution.create({
       data: {
@@ -294,6 +295,9 @@ async function main() {
         purpose: 'Emergency Surgery',
         urgency: 'Emergency',
         status: 'Issued',
+        requestingHospitalId: otherHospitalId,
+        targetHospitalId: hospital.id,
+        contactPerson: 'Dr. Emergency',
         approvedBy: 'Dr. Smith',
         notes: 'Emergency case - patient in critical condition'
       }
@@ -307,6 +311,9 @@ async function main() {
         purpose: 'Routine Surgery',
         urgency: 'Routine',
         status: 'Requested',
+        requestingHospitalId: otherHospitalId,
+        targetHospitalId: hospital.id,
+        contactPerson: 'Dr. Routine',
         notes: 'Scheduled surgery for next week'
       }
     })

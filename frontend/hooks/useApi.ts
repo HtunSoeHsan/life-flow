@@ -70,18 +70,26 @@ export function useCollections(params?: { hospitalId?: string; status?: string; 
   };
 }
 
-export function useDistributions(params?: { status?: string; urgency?: string; page?: number; limit?: number }) {
+export function useDistributions(params?: { hospitalId?: string; status?: string; urgency?: string; page?: number; limit?: number }) {
   const [distributions, setDistributions] = useState([]);
+  const [myRequests, setMyRequests] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDistributions = async () => {
+    if (!params?.hospitalId) return;
+    
     try {
       setLoading(true);
-      const response = await apiService.getDistributions(params);
-      setDistributions(response.data?.distributions || []);
-      setPagination(response.data?.pagination || { page: 1, limit: 10, total: 0, pages: 0 });
+      const [incomingResponse, myRequestsResponse] = await Promise.all([
+        apiService.getDistributions(params),
+        apiService.getMyRequests(params.hospitalId)
+      ]);
+      
+      setDistributions(incomingResponse.data?.distributions || []);
+      setMyRequests(myRequestsResponse.data?.distributions || []);
+      setPagination(incomingResponse.data?.pagination || { page: 1, limit: 10, total: 0, pages: 0 });
       setError(null);
     } catch (err) {
       setError('Failed to fetch distributions');
@@ -93,11 +101,11 @@ export function useDistributions(params?: { status?: string; urgency?: string; p
 
   useEffect(() => {
     fetchDistributions();
-  }, [params?.status, params?.urgency, params?.page, params?.limit]);
+  }, [params?.hospitalId, params?.status, params?.urgency, params?.page, params?.limit]);
 
   const createDistribution = async (data: any) => {
     try {
-      const response = await apiService.createDistribution(data);
+      const response = await apiService.createDistribution(data, params?.hospitalId);
       await fetchDistributions(); // Refresh data
       return response;
     } catch (err) {
@@ -107,7 +115,7 @@ export function useDistributions(params?: { status?: string; urgency?: string; p
 
   const issueBloodUnits = async (id: string, data: any) => {
     try {
-      const response = await apiService.issueBloodUnits(id, data);
+      const response = await apiService.issueBloodUnits(id, data, params?.hospitalId);
       await fetchDistributions(); // Refresh data
       return response;
     } catch (err) {
@@ -117,7 +125,7 @@ export function useDistributions(params?: { status?: string; urgency?: string; p
 
   const cancelDistribution = async (id: string, reason?: string) => {
     try {
-      await apiService.cancelDistribution(id, reason);
+      await apiService.cancelDistribution(id, reason, params?.hospitalId);
       await fetchDistributions(); // Refresh data
     } catch (err) {
       throw new Error('Failed to cancel distribution');
@@ -126,6 +134,7 @@ export function useDistributions(params?: { status?: string; urgency?: string; p
 
   return {
     distributions,
+    myRequests,
     pagination,
     loading,
     error,
@@ -136,16 +145,18 @@ export function useDistributions(params?: { status?: string; urgency?: string; p
   };
 }
 
-export function useDistributionStats() {
+export function useDistributionStats(hospitalId?: string) {
   const [stats, setStats] = useState({ total: 0, pending: 0, emergency: 0, completed: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!hospitalId) return;
+      
       try {
         setLoading(true);
-        const response = await apiService.getDistributionStats();
+        const response = await apiService.getDistributionStats(hospitalId);
         setStats(response.data || { total: 0, pending: 0, emergency: 0, completed: 0 });
         setError(null);
       } catch (err) {
@@ -157,7 +168,7 @@ export function useDistributionStats() {
     };
 
     fetchStats();
-  }, []);
+  }, [hospitalId]);
 
   return { stats, loading, error };
 }

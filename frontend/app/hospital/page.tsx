@@ -93,7 +93,7 @@ export default function HospitalDashboard() {
       case 'collection':
         return <CollectionProcessing />;
       case 'distribution':
-        return <IssueDistribution />;
+        return <IssueDistribution hospitalId={hospitalData.user.hospitalId} />;
       default:
         return (
           <div className="space-y-6">
@@ -148,7 +148,7 @@ export default function HospitalDashboard() {
 console.log(hospitalData);
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider trigger={null} collapsible collapsed={collapsed} width={250}>
         <div className="p-4 text-white text-center font-bold">
           {collapsed ? 'LF' : 'LifeFlow'}
         </div>
@@ -180,7 +180,7 @@ console.log(hospitalData);
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                 <UserOutlined className="text-blue-600" />
               </div>
-              <div className="text-right">
+              <div className="text-left">
                 <div className="text-sm font-medium text-gray-800">
                   {hospitalData.user.firstName && hospitalData.user.lastName 
                     ? `${hospitalData.user.firstName} ${hospitalData.user.lastName}`

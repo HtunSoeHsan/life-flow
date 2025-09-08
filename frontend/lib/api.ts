@@ -124,10 +124,15 @@ class ApiService {
   }
 
   // Distribution APIs
-  async getDistributions(params?: { status?: string; urgency?: string; page?: number; limit?: number }) {
+  async getDistributions(params?: { hospitalId?: string; status?: string; urgency?: string; page?: number; limit?: number }) {
     const queryParams = new URLSearchParams();
+    const headers: any = {};
+    
     if (params) {
-      Object.entries(params).forEach(([key, value]) => {
+      const { hospitalId, ...queryParamsData } = params;
+      if (hospitalId) headers['x-hospital-id'] = hospitalId;
+      
+      Object.entries(queryParamsData).forEach(([key, value]) => {
         if (value !== undefined) {
           queryParams.append(key, value.toString());
         }
@@ -135,12 +140,14 @@ class ApiService {
     }
     
     const endpoint = `/api/distributions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return this.request(endpoint);
+    return this.request(endpoint, { headers });
   }
 
-  async createDistribution(distributionData: any) {
+  async createDistribution(distributionData: any, hospitalId?: string) {
+    const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
     return this.request('/api/distributions', {
       method: 'POST',
+      headers,
       body: JSON.stringify(distributionData),
     });
   }
@@ -156,28 +163,40 @@ class ApiService {
     });
   }
 
-  async issueBloodUnits(id: string, data: any) {
+  async issueBloodUnits(id: string, data: any, hospitalId?: string) {
+    const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
     return this.request(`/api/distributions/${id}/issue`, {
       method: 'POST',
+      headers,
       body: JSON.stringify(data),
     });
   }
 
-  async cancelDistribution(id: string, reason?: string) {
+  async cancelDistribution(id: string, reason?: string, hospitalId?: string) {
+    const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
     return this.request(`/api/distributions/${id}/cancel`, {
       method: 'POST',
+      headers,
       body: JSON.stringify({ reason }),
     });
   }
 
-  async deleteDistribution(id: string) {
+  async deleteDistribution(id: string, hospitalId?: string) {
+    const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
     return this.request(`/api/distributions/${id}`, {
       method: 'DELETE',
+      headers,
     });
   }
 
-  async getDistributionStats() {
-    return this.request('/api/distributions/stats');
+  async getDistributionStats(hospitalId?: string) {
+    const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
+    return this.request('/api/distributions/stats', { headers });
+  }
+
+  async getMyRequests(hospitalId?: string) {
+    const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
+    return this.request('/api/distributions/my-requests', { headers });
   }
 
   // Hospital APIs
