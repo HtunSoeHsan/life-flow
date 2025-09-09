@@ -14,9 +14,11 @@ import {
   MenuUnfoldOutlined,
   UserOutlined,
   SearchOutlined,
-  FilterOutlined
+  FilterOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
+import AuditLogs from '@/components/audit/AuditLogs';
 
 const { Header, Sider, Content } = Layout;
 
@@ -45,6 +47,7 @@ export default function AdminDashboard() {
   const [userSearchText, setUserSearchText] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
   const [userStatusFilter, setUserStatusFilter] = useState('all');
+  const [selectedHospitalForAudit, setSelectedHospitalForAudit] = useState(null);
 
   const fetchHospitalUsers = async (hospitalId: string) => {
     try {
@@ -230,6 +233,7 @@ export default function AdminDashboard() {
     { key: 'hospitals', icon: <BankOutlined />, label: 'Hospital Management' },
     { key: 'analytics', icon: <BarChartOutlined />, label: 'System Analytics' },
     { key: 'users', icon: <UserOutlined />, label: 'User Management' },
+    { key: 'audit', icon: <FileTextOutlined />, label: 'Audit Logs' },
   ];
 
   const hospitalColumns = [
@@ -569,6 +573,32 @@ export default function AdminDashboard() {
                 className="border-0"
               />
             </Card>
+          </div>
+        );
+      
+      case 'audit':
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-semibold">System Audit Logs</h3>
+              <Select
+                placeholder="Select Hospital"
+                style={{ width: 300 }}
+                value={selectedHospitalForAudit?.id}
+                onChange={(hospitalId) => {
+                  const hospital = hospitals.find(h => h.id === hospitalId);
+                  setSelectedHospitalForAudit(hospital);
+                }}
+                allowClear
+              >
+                {hospitals.map(hospital => (
+                  <Select.Option key={hospital.id} value={hospital.id}>
+                    {hospital.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
+            <AuditLogs hospitalId={selectedHospitalForAudit?.id} />
           </div>
         );
       

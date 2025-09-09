@@ -11,6 +11,8 @@ import collectionRoutes from './routes/collectionRoutes';
 import distributionRoutes from './routes/distributionRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
 import authRoutes from './routes/authRoutes';
+import auditRoutes from './routes/auditRoutes';
+import testRoutes from './routes/testRoutes';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -61,6 +63,8 @@ app.use('/api/donors', donorRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/distributions', distributionRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/test', testRoutes);
 
 // Protected routes example (uncomment to enable auth)
 // import { authenticateToken, requireRole } from './middleware/authMiddleware';

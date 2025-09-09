@@ -320,6 +320,52 @@ async function main() {
   ]);
 
     console.log(`✅ Created distributions for ${hospital.name}:`, distributions.map(d => d.distributionId));
+
+    // Create audit logs for this hospital
+    const auditLogs = await Promise.all([
+      tenantClient.auditLog.create({
+        data: {
+          userId: users[0].id,
+          userEmail: users[0].email,
+          action: 'CREATE',
+          entityType: 'Donor',
+          entityId: donors[0].id,
+          newValues: { firstName: donors[0].firstName, lastName: donors[0].lastName },
+          ipAddress: '192.168.1.100',
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          timestamp: new Date('2024-01-15T09:00:00Z')
+        }
+      }),
+      tenantClient.auditLog.create({
+        data: {
+          userId: users[1].id,
+          userEmail: users[1].email,
+          action: 'UPDATE',
+          entityType: 'BloodUnit',
+          entityId: bloodUnits[0].id,
+          oldValues: { status: 'Quarantine' },
+          newValues: { status: 'Available' },
+          ipAddress: '192.168.1.101',
+          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          timestamp: new Date('2024-01-16T14:30:00Z')
+        }
+      }),
+      tenantClient.auditLog.create({
+        data: {
+          userId: users[0].id,
+          userEmail: users[0].email,
+          action: 'CREATE',
+          entityType: 'Distribution',
+          entityId: distributions[0].id,
+          newValues: { distributionId: distributions[0].distributionId, status: 'Requested' },
+          ipAddress: '192.168.1.100',
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          timestamp: new Date('2024-02-01T10:15:00Z')
+        }
+      })
+    ]);
+
+    console.log(`✅ Created audit logs for ${hospital.name}:`, auditLogs.length);
     
   }
   

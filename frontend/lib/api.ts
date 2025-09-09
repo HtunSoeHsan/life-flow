@@ -10,10 +10,27 @@ class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
+    // Get user info from auth data in localStorage
+    let userEmail = 'anonymous@lifeflow.com';
+    let userId = 'anonymous';
+    
+    try {
+      const authData = localStorage.getItem('auth');
+      if (authData) {
+        const auth = JSON.parse(authData);
+        userEmail = auth.user?.email || userEmail;
+        userId = auth.user?.id || userId;
+      }
+    } catch (error) {
+      console.warn('Failed to parse auth data from localStorage');
+    }
+    
     const config: RequestInit = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        'x-user-email': userEmail,
+        'x-user-id': userId,
         ...options.headers,
       },
     };
@@ -284,6 +301,31 @@ class ApiService {
     const endpoint = `/api/inventory/expiring${days ? `?days=${days}` : ''}`;
     const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
     return this.request(endpoint, { headers });
+  }
+
+  // Audit APIs
+  async getAuditLogs(params?: { hospitalId?: string; userId?: string; action?: string; entityType?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) {
+    const queryParams = new URLSearchParams();
+    const headers: any = {};
+    
+    if (params) {
+      const { hospitalId, ...queryParamsData } = params;
+      if (hospitalId) headers['x-hospital-id'] = hospitalId;
+      
+      Object.entries(queryParamsData).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, value.toString());
+        }
+      });
+    }
+    
+    const endpoint = `/api/audit/logs${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request(endpoint, { headers });
+  }
+
+  async getAuditStats(hospitalId?: string) {
+    const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
+    return this.request('/api/audit/stats', { headers });
   }
 
   // Health check

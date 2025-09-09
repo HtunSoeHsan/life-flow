@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { DistributionController } from '../controllers/DistributionController';
 import SchemaManager from '../database/schemaManager';
+import { auditLogger } from '../middleware/auditLogger';
 
 const router = Router();
 const schemaManager = SchemaManager.getInstance();
@@ -26,7 +27,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/distributions - Create new distribution request
-router.post('/', async (req, res) => {
+router.post('/', auditLogger('CREATE', 'Distribution'), async (req, res) => {
   try {
     // Use target hospital's database for the request
     const targetHospitalId = req.body.targetHospitalId;
@@ -73,7 +74,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // PUT /api/distributions/:id - Update distribution request
-router.put('/:id', async (req, res) => {
+router.put('/:id', auditLogger('UPDATE', 'Distribution'), async (req, res) => {
   try {
     const controller = getController(req);
     await controller.updateDistribution(req, res);
@@ -83,7 +84,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // POST /api/distributions/:id/issue - Issue blood units for distribution
-router.post('/:id/issue', async (req, res) => {
+router.post('/:id/issue', auditLogger('ISSUE', 'Distribution'), async (req, res) => {
   try {
     const controller = getController(req);
     await controller.issueBloodUnits(req, res);
@@ -93,7 +94,7 @@ router.post('/:id/issue', async (req, res) => {
 });
 
 // POST /api/distributions/:id/cancel - Cancel distribution request
-router.post('/:id/cancel', async (req, res) => {
+router.post('/:id/cancel', auditLogger('CANCEL', 'Distribution'), async (req, res) => {
   try {
     const controller = getController(req);
     await controller.cancelDistribution(req, res);
@@ -103,7 +104,7 @@ router.post('/:id/cancel', async (req, res) => {
 });
 
 // DELETE /api/distributions/:id - Delete distribution request
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auditLogger('DELETE', 'Distribution'), async (req, res) => {
   try {
     const controller = getController(req);
     await controller.deleteDistribution(req, res);

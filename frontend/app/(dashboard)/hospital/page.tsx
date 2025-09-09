@@ -10,13 +10,15 @@ import {
   LogoutOutlined,
   HeartOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import BloodInventory from '@/components/inventory/BloodInventory';
 import DonorManagement from '@/components/donor/DonorManagement';
 import CollectionProcessing from '@/components/collection/CollectionProcessing';
 import IssueDistribution from '@/components/distribution/IssueDistribution';
+import AuditLogs from '@/components/audit/AuditLogs';
 
 const { Header, Sider, Content } = Layout;
 
@@ -82,6 +84,7 @@ export default function HospitalDashboard() {
     { key: 'donors', icon: <UserOutlined />, label: 'Donor Management' },
     { key: 'collection', icon: <HeartOutlined />, label: 'Blood Collection' },
     { key: 'distribution', icon: <BarChartOutlined />, label: 'Distribution' },
+    { key: 'audit', icon: <FileTextOutlined />, label: 'Audit Logs' },
   ];
 
   const renderContent = () => {
@@ -94,6 +97,13 @@ export default function HospitalDashboard() {
         return <CollectionProcessing />;
       case 'distribution':
         return <IssueDistribution hospitalId={hospitalData.user.hospitalId} />;
+      case 'audit':
+        return (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold">Hospital Audit Logs</h3>
+            <AuditLogs hospitalId={hospitalData.user.hospitalId} />
+          </div>
+        );
       default:
         return (
           <div className="space-y-6">
