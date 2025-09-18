@@ -106,7 +106,7 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
     setHospitalId(getHospitalId());
   }, [propHospitalId]);
   
-  const { collections, pagination, loading, error, createCollection, updateCollectionStatus } = useCollections({
+  const { collections, pagination, loading, error, createCollection, updateCollectionStatus, refetch } = useCollections({
     hospitalId,
     status: filterStatus,
     search: searchText,
@@ -119,8 +119,44 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
   const [selectedCollection, setSelectedCollection] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('collections');
   const [submitting, setSubmitting] = useState(false);
+  const [showCompleteCollection, setShowCompleteCollection] = useState(false);
   const [form] = Form.useForm();
   const [statusForm] = Form.useForm();
+  const [completeForm] = Form.useForm();
+  const [donorInfo, setDonorInfo] = useState<any>(null);
+  const [fetchingDonor, setFetchingDonor] = useState(false);
+
+  const fetchDonorInfo = async (donorId: string) => {
+    if (!donorId) {
+      setDonorInfo(null);
+      return;
+    }
+    
+    try {
+      setFetchingDonor(true);
+      const response = await fetch(`http://localhost:3001/api/donors?search=${donorId}`, {
+        headers: { 'x-hospital-id': hospitalId }
+      });
+      const data = await response.json();
+      if (data.success && data.data.donors.length > 0) {
+        const donor = data.data.donors.find((d: any) => d.donorId === donorId);
+        if (donor) {
+          setDonorInfo(donor);
+        } else {
+          setDonorInfo(null);
+          message.warning('Donor not found');
+        }
+      } else {
+        setDonorInfo(null);
+        message.warning('Donor not found');
+      }
+    } catch (error) {
+      setDonorInfo(null);
+      message.error('Failed to search donor');
+    } finally {
+      setFetchingDonor(false);
+    }
+  };
 
   const handleNewCollection = async (values: any) => {
     try {
@@ -139,6 +175,7 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
       message.success('Collection scheduled successfully');
       setShowNewCollection(false);
       form.resetFields();
+      setDonorInfo(null);
     } catch (error) {
       message.error('Failed to schedule collection');
     } finally {
@@ -168,12 +205,12 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
   const displayCollections = collections || [];
 
   const collectionSteps = [
-    'Donor Registration',
-    'Pre-donation Screening',
-    'Blood Collection',
-    'Quality Control',
-    'Testing & Processing',
-    'Storage'
+    'Step 1: Donor Registration',
+    'Step 2: Pre-donation Screening', 
+    'Step 3: Blood Collection',
+    'Step 4: Quality Control',
+    'Step 5: Testing & Processing',
+    'Step 6: Storage'
   ];
 
   const columns = [
@@ -272,17 +309,32 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
           >
             View Details
           </Button>
-          <Button 
-            type="link" 
-            size="small"
-            onClick={() => {
-              setSelectedCollection(record);
-              statusForm.setFieldsValue({ status: record.status, notes: '' });
-              setShowUpdateStatus(true);
-            }}
-          >
-            Update Status
-          </Button>
+          {record.status !== 'Completed' && (
+            <Button 
+              type="link" 
+              size="small"
+              onClick={() => {
+                setSelectedCollection(record);
+                statusForm.setFieldsValue({ status: record.status, notes: '' });
+                setShowUpdateStatus(true);
+              }}
+            >
+              Update Status
+            </Button>
+          )}
+          {record.status === 'Testing' && (
+            <Button 
+              type="link" 
+              size="small"
+              style={{ color: '#52c41a' }}
+              onClick={() => {
+                setSelectedCollection(record);
+                setShowCompleteCollection(true);
+              }}
+            >
+              Complete
+            </Button>
+          )}
           <Button 
             type="link" 
             size="small"
@@ -506,13 +558,36 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
       >
         <Form layout="vertical" form={form} onFinish={handleNewCollection}>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item 
                 name="donorId" 
                 label="Donor ID" 
                 rules={[{ required: true, message: 'Please enter donor ID' }]}
               >
-                <Input prefix={<UserOutlined />} placeholder="Enter donor ID" />
+                <Input 
+                  prefix={<UserOutlined />} 
+                  placeholder="Enter donor ID" 
+                  onBlur={(e) => fetchDonorInfo(e.target.value)}
+                  loading={fetchingDonor}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="Donor Name">
+                <Input 
+                  value={donorInfo ? `${donorInfo.firstName} ${donorInfo.lastName}` : ''}
+                  placeholder="Donor name will appear here"
+                  disabled
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="Blood Group">
+                <Input 
+                  value={donorInfo ? donorInfo.bloodGroup : ''}
+                  placeholder="Blood group will appear here"
+                  disabled
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -526,7 +601,16 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={8}>
+              <Form.Item 
+                name="collectionDate" 
+                label="Collection Date" 
+                rules={[{ required: true, message: 'Please select collection date' }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
               <Form.Item 
                 name="collectionType" 
                 label="Collection Type" 
@@ -540,7 +624,7 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item 
                 name="collectionMethod" 
                 label="Collection Method" 
@@ -636,7 +720,21 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
           onFinish={async (values) => {
             try {
               setSubmitting(true);
-              await updateCollectionStatus(selectedCollection.id, values.status, values.notes);
+              
+              // Map status to currentStep
+              const statusToStepMap: { [key: string]: number } = {
+                'Scheduled': 1,
+                'Pre-Screening': 2,
+                'Processing': 3,
+                'Quality Check': 4,
+                'Testing': 5,
+                'Completed': 6,
+                'Cancelled': selectedCollection.currentStep || 1
+              };
+              
+              const currentStep = statusToStepMap[values.status] || selectedCollection.currentStep || 1;
+              
+              await updateCollectionStatus(selectedCollection.id, values.status, values.notes, currentStep);
               message.success('Status updated successfully');
               setShowUpdateStatus(false);
             } catch (error) {
@@ -652,9 +750,11 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
             rules={[{ required: true, message: 'Please select status' }]}
           >
             <Select>
-              <Option value="Scheduled">Scheduled</Option>
-              <Option value="Processing">Processing</Option>
-              <Option value="Completed">Completed</Option>
+              <Option value="Scheduled">Scheduled (Step 1: Donor Registration)</Option>
+              <Option value="Pre-Screening">Pre-Screening (Step 2: Health Check)</Option>
+              <Option value="Processing">Processing (Step 3: Blood Collection)</Option>
+              <Option value="Quality Check">Quality Check (Step 4: Visual Inspection)</Option>
+              <Option value="Testing">Testing (Step 5: Disease Screening)</Option>
               <Option value="Cancelled">Cancelled</Option>
             </Select>
           </Form.Item>
@@ -664,6 +764,190 @@ export default function CollectionProcessing({ hospitalId: propHospitalId }: Col
           <div className="flex justify-end space-x-2">
             <Button onClick={() => setShowUpdateStatus(false)} disabled={submitting}>Cancel</Button>
             <Button type="primary" htmlType="submit" loading={submitting}>Update Status</Button>
+          </div>
+        </Form>
+      </Modal>
+
+      {/* Complete Collection Modal */}
+      <Modal
+        title="Complete Blood Collection"
+        open={showCompleteCollection}
+        onCancel={() => setShowCompleteCollection(false)}
+        footer={null}
+        width={600}
+      >
+        <Form 
+          form={completeForm} 
+          layout="vertical" 
+          onFinish={async (values) => {
+            try {
+              setSubmitting(true);
+              const response = await fetch(`http://localhost:3001/api/collections/${selectedCollection.id}/complete`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-hospital-id': hospitalId
+                },
+                body: JSON.stringify({ bloodUnitData: values })
+              });
+              
+              if (response.ok) {
+                message.success('Collection completed and blood unit created successfully');
+                setShowCompleteCollection(false);
+                completeForm.resetFields();
+                // Refresh the collections data to show updated status
+                await refetch();
+              } else {
+                message.error('Failed to complete collection');
+              }
+            } catch (error) {
+              message.error('Failed to complete collection');
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+          initialValues={{
+            component: 'Whole Blood',
+            volume: selectedCollection?.volume || 450,
+            location: 'Refrigerator-A1',
+            collectionMethod: 'Voluntary',
+            collectionBagType: 'Triple',
+            anticoagulant: 'CPDA-1',
+            visualInspection: 'Normal',
+            temperature: 4.0
+          }}
+        >
+          <Alert
+            message="Complete Collection"
+            description="This will create a blood unit and mark the collection as completed."
+            type="info"
+            showIcon
+            className="mb-4"
+          />
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item 
+                name="component" 
+                label="Blood Component" 
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="Whole Blood">Whole Blood</Option>
+                  <Option value="Red Blood Cells">Red Blood Cells</Option>
+                  <Option value="Plasma">Plasma</Option>
+                  <Option value="Platelets">Platelets</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item 
+                name="volume" 
+                label="Volume (ml)" 
+                rules={[{ required: true }]}
+              >
+                <Input type="number" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item 
+                name="location" 
+                label="Storage Location" 
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="Refrigerator-A1">Refrigerator-A1</Option>
+                  <Option value="Refrigerator-A2">Refrigerator-A2</Option>
+                  <Option value="Refrigerator-B1">Refrigerator-B1</Option>
+                  <Option value="Refrigerator-B2">Refrigerator-B2</Option>
+                  <Option value="Freezer-B1">Freezer-B1</Option>
+                  <Option value="Freezer-B2">Freezer-B2</Option>
+                  <Option value="Agitator-C1">Agitator-C1</Option>
+                  <Option value="Agitator-C2">Agitator-C2</Option>
+                  <Option value="Quarantine-Q1">Quarantine-Q1</Option>
+                  <Option value="Quarantine-Q2">Quarantine-Q2</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item 
+                name="collectionMethod" 
+                label="Collection Method" 
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="Voluntary">Voluntary Donation</Option>
+                  <Option value="Replacement">Replacement Donation</Option>
+                  <Option value="Autologous">Autologous Donation</Option>
+                  <Option value="Apheresis">Apheresis</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item 
+                name="collectionBagType" 
+                label="Collection Bag Type" 
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="Single">Single Bag</Option>
+                  <Option value="Double">Double Bag</Option>
+                  <Option value="Triple">Triple Bag</Option>
+                  <Option value="Quadruple">Quadruple Bag</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item 
+                name="anticoagulant" 
+                label="Anticoagulant Used" 
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="CPDA-1">CPDA-1</Option>
+                  <Option value="CPD">CPD</Option>
+                  <Option value="ACD">ACD</Option>
+                  <Option value="Heparin">Heparin</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item 
+                name="temperature" 
+                label="Storage Temperature (°C)" 
+                rules={[{ required: true }]}
+              >
+                <Input type="number" step="0.1" placeholder="4.0" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item 
+                name="visualInspection" 
+                label="Visual Inspection" 
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="Normal">Normal - Clear, no clots or abnormal color</Option>
+                  <Option value="Abnormal">Abnormal - Visible issues detected</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+          
+
+          
+          <div className="flex justify-end space-x-2">
+            <Button onClick={() => setShowCompleteCollection(false)} disabled={submitting}>Cancel</Button>
+            <Button type="primary" htmlType="submit" loading={submitting}>Complete Collection</Button>
           </div>
         </Form>
       </Modal>

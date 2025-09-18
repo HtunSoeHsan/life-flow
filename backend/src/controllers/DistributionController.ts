@@ -56,6 +56,8 @@ export class DistributionController {
       const {
         bloodUnitId,
         quantity,
+        component,
+        bloodGroup,
         purpose,
         urgency,
         requestingHospitalId,
@@ -83,6 +85,8 @@ export class DistributionController {
           bloodUnitId: bloodUnitId || `UNIT${Date.now()}`,
           requestDate: new Date(),
           quantity: parseFloat(quantity),
+          component: component || 'Whole Blood',
+          bloodGroup: bloodGroup || null,
           purpose,
           urgency,
           status: 'Requested',
@@ -150,25 +154,93 @@ export class DistributionController {
   }
 
   /**
+   * Get available blood units for distribution
+   */
+  public async getAvailableBloodUnits(req: Request, res: Response): Promise<void> {
+    try {
+      const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
+      if (!hospitalId) {
+        res.status(400).json({ error: 'Hospital ID required' });
+        return;
+      }
+
+      const { bloodGroup, component, limit = 50 } = req.query;
+      const tenantClient = schemaManager.getTenantClient(hospitalId);
+      
+      const where: any = { status: 'Available' };
+      if (bloodGroup) where.bloodGroup = bloodGroup;
+      // if (component) where.component = component;
+      
+      const availableUnits = await tenantClient.bloodUnit.findMany({
+        where,
+        take: Number(limit),
+        orderBy: { expiryDate: 'asc' },
+        include: {
+          donor: {
+            select: {
+              firstName: true,
+              lastName: true,
+              donorId: true
+            }
+          }
+        }
+      });
+      
+      res.json({
+        success: true,
+        data: availableUnits
+      });
+    } catch (error) {
+      console.error('Error fetching available blood units:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
    * Issue blood units for a distribution request
    */
   public async issueBloodUnits(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { bloodUnitIds, issuedBy, deliveryMethod, notes } = req.body;
+      const { bloodUnitIds, issuedBy, notes } = req.body;
+      const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
+      
+      if (!hospitalId) {
+        res.status(400).json({ error: 'Hospital ID required' });
+        return;
+      }
 
+      if (!bloodUnitIds || !Array.isArray(bloodUnitIds) || bloodUnitIds.length === 0) {
+        res.status(400).json({ error: 'Blood unit IDs required' });
+        return;
+      }
+
+      const tenantClient = schemaManager.getTenantClient(hospitalId);
+      
       // Check if distribution exists
       const distribution = await this.dao.findById(id);
-
       if (!distribution) {
         res.status(404).json({ error: 'Distribution request not found' });
         return;
       }
 
+      // Update blood units status to 'Issued'
+      await tenantClient.bloodUnit.updateMany({
+        where: {
+          id: { in: bloodUnitIds },
+          status: 'Available'
+        },
+        data: {
+          status: 'Issued',
+          updatedAt: new Date()
+        }
+      });
+
       // Update distribution status
       const updatedDistribution = await this.dao.issueDistribution(
         id,
         issuedBy || 'System',
+        bloodUnitIds.length,
         notes || distribution.notes
       );
 

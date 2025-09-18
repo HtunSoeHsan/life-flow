@@ -80,9 +80,9 @@ export default function HospitalDashboard() {
 
   const menuItems = [
     { key: 'dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
-    { key: 'inventory', icon: <MedicineBoxOutlined />, label: 'Blood Inventory' },
     { key: 'donors', icon: <UserOutlined />, label: 'Donor Management' },
     { key: 'collection', icon: <HeartOutlined />, label: 'Blood Collection' },
+    { key: 'inventory', icon: <MedicineBoxOutlined />, label: 'Blood Inventory' },
     { key: 'distribution', icon: <BarChartOutlined />, label: 'Distribution' },
     { key: 'audit', icon: <FileTextOutlined />, label: 'Audit Logs' },
   ];
@@ -157,7 +157,7 @@ export default function HospitalDashboard() {
   if (!hospitalData) return null;
 console.log(hospitalData);
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       <Sider trigger={null} collapsible collapsed={collapsed} width={250}>
         <div className="p-4 text-white text-center font-bold">
           {collapsed ? 'LF' : 'LifeFlow'}
@@ -212,7 +212,7 @@ console.log(hospitalData);
           </div>
         </Header>
         
-        <Content className="m-6">
+        <Content style={{ overflow: 'auto', padding: '24px' }}>
           {renderContent()}
         </Content>
       </Layout>

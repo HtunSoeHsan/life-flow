@@ -1,0 +1,31 @@
+{
+  "name": "life-flow",
+  "version": "1.0.0",
+  "description": "Blood Bank Management System - Full Stack Application",
+  "private": true,
+  "scripts": {
+    "start": "./start.sh",
+    "dev": "./start.sh",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "build:all": "cd backend && npm run build && cd ../frontend && npm run build",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "db:setup": "cd backend && npm run db:generate && npm run db:migrate && npm run db:seed",
+    "db:studio": "cd backend && npm run db:studio",
+    "db:reset": "cd backend && npm run db:reset"
+  },
+  "keywords": [
+    "blood-bank",
+    "healthcare",
+    "management-system",
+    "nextjs",
+    "nodejs",
+    "postgresql"
+  ],
+  "author": "",
+  "license": "ISC",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}

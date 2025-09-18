@@ -130,6 +130,9 @@ model Distribution {
   requestDate          DateTime
   issueDate            DateTime?
   quantity             Float
+  component            String?
+  bloodGroup           String?
+  unitsIssued          Int      @default(0)
   purpose              String
   urgency              String
   status               String   @default("Requested")

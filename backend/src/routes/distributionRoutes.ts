@@ -63,6 +63,16 @@ router.get('/my-requests', async (req, res) => {
   }
 });
 
+// GET /api/distributions/available-units - Get available blood units for distribution
+router.get('/available-units', async (req, res) => {
+  try {
+    const controller = getController(req);
+    await controller.getAvailableBloodUnits(req, res);
+  } catch (error) {
+    res.status(400).json({ error: 'Hospital ID required' });
+  }
+});
+
 // GET /api/distributions/:id - Get specific distribution request
 router.get('/:id', async (req, res) => {
   try {

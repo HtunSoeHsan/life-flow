@@ -26,7 +26,8 @@ import {
   message,
   Tooltip,
   Progress,
-  Spin
+  Spin,
+  Checkbox
 } from 'antd';
 import {
   PlusOutlined,
@@ -64,6 +65,7 @@ interface BloodRequest {
   contactPerson: string;
   contactPhone: string;
   component: string;
+  bloodGroup?: string;
   unitsRequested: number;
   unitsIssued: number;
   urgency: 'Emergency' | 'Urgent' | 'Routine';
@@ -128,6 +130,9 @@ export default function IssueDistribution({ hospitalId: propHospitalId }: IssueD
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
   const [issueForm] = Form.useForm();
+  const [availableUnits, setAvailableUnits] = useState<any[]>([]);
+  const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
+  const [loadingUnits, setLoadingUnits] = useState(false);
   
   // Search and filter states
   const [searchText, setSearchText] = useState('');
@@ -136,13 +141,15 @@ export default function IssueDistribution({ hospitalId: propHospitalId }: IssueD
   const [urgencyFilter, setUrgencyFilter] = useState('');
   const [myRequestsSearchText, setMyRequestsSearchText] = useState('');
   const [myRequestsStatusFilter, setMyRequestsStatusFilter] = useState('');
-
+  console.log("avaliable unit:", availableUnits);
   const handleNewRequest = async (values: any) => {
     try {
       setSubmitting(true);
       const requestData = {
         bloodUnitId: values.bloodUnitId || `UNIT${Date.now()}`,
         quantity: values.quantity,
+        component: values.component,
+        bloodGroup: values.bloodGroup,
         purpose: values.purpose,
         urgency: values.urgency,
         requestingHospitalId: hospitalId,
@@ -162,19 +169,62 @@ export default function IssueDistribution({ hospitalId: propHospitalId }: IssueD
     }
   };
 
+  const fetchAvailableUnits = async (request: BloodRequest) => {
+    try {
+      setLoadingUnits(true);
+      setAvailableUnits([]);
+      const params = new URLSearchParams();
+      if (request?.component && request.component !== 'Blood Unit') {
+        params.append('component', request.component);
+      }
+      if (request?.bloodGroup) {
+        params.append('bloodGroup', request.bloodGroup);
+      }
+      
+      const url = `http://localhost:3001/api/distributions/available-units?${params}`;
+      console.log('Fetching available units:', url, 'Hospital ID:', hospitalId, 'Request:', request);
+      console.log('Request targetHospitalId:', request?.targetHospitalId, 'Request requestingHospitalId:', request?.requestingHospitalId);
+      
+      const response = await fetch(url, {
+        headers: {
+          'x-hospital-id': hospitalId,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      console.log('Available units response:', data);
+      
+      if (data.success) {
+        setAvailableUnits(data.data);
+      } else {
+        console.error('API returned error:', data);
+        message.error(data.error || 'Failed to load available blood units');
+      }
+    } catch (error) {
+      console.error('Failed to fetch available units:', error);
+      message.error('Failed to load available blood units');
+    } finally {
+      setLoadingUnits(false);
+    }
+  };
+
   const handleIssueBlood = async (values: any) => {
     try {
       setSubmitting(true);
-      if (selectedRequest) {
+      if (selectedRequest && selectedUnits.length > 0) {
         await issueBloodUnits(selectedRequest.requestId, {
+          bloodUnitIds: selectedUnits,
           issuedBy: values.issuedBy || 'System',
-          deliveryMethod: values.deliveryMethod || 'Hospital Pickup',
           notes: values.notes
         });
         message.success('Blood units issued successfully');
         setShowIssueModal(false);
         issueForm.resetFields();
         setSelectedRequest(null);
+        setSelectedUnits([]);
+        setAvailableUnits([]);
+      } else {
+        message.error('Please select at least one blood unit to issue');
       }
     } catch (error) {
       message.error('Failed to issue blood units');
@@ -294,9 +344,10 @@ console.log("distributions", distributions);
       hospitalName: requestingHospital?.name || 'Unknown Hospital',
       contactPerson: d.contactPerson,
       contactPhone: requestingHospital?.phone || 'N/A',
-      component: 'Blood Unit',
+      component: d.component || 'Blood Unit',
+      bloodGroup: d.bloodGroup,
       unitsRequested: d.quantity,
-      unitsIssued: d.status === 'Issued' ? d.quantity : 0,
+      unitsIssued: d.unitsIssued || 0,
       urgency: d.urgency,
       requestDate: d.requestDate,
       requiredBy: d.requestDate,
@@ -332,9 +383,10 @@ console.log("distributions", distributions);
       hospitalName: targetHospital?.name || 'Unknown Hospital',
       contactPerson: d.contactPerson || 'Unknown',
       contactPhone: 'N/A',
-      component: 'Blood Unit',
+      component: d.component || 'Blood Unit',
+      bloodGroup: d.bloodGroup,
       unitsRequested: d.quantity || 1,
-      unitsIssued: d.status === 'Issued' ? d.quantity || 1 : 0,
+      unitsIssued: d.unitsIssued || 0,
       urgency: d.urgency,
       requestDate: d.requestDate,
       requiredBy: d.requestDate,
@@ -489,6 +541,7 @@ console.log("distributions", distributions);
               onClick={() => {
                 setSelectedRequest(record);
                 setShowIssueModal(true);
+                fetchAvailableUnits(record);
               }}
             >
               Issue Blood
@@ -878,30 +931,98 @@ console.log("distributions", distributions);
       <Modal
         title="Issue Blood Units"
         open={showIssueModal}
-        onCancel={() => setShowIssueModal(false)}
+        onCancel={() => {
+          setShowIssueModal(false);
+          setSelectedUnits([]);
+          setAvailableUnits([]);
+        }}
         footer={null}
-        width={700}
+        width={900}
       >
         {selectedRequest && (
           <div className="space-y-4">
             <Alert
               message={`Processing request for ${selectedRequest.hospitalName}`}
-              description={`${selectedRequest.unitsRequested} units of ${selectedRequest.component} required`}
+              description={`${selectedRequest.unitsRequested} units of ${selectedRequest.component}${selectedRequest.bloodGroup ? ` (${selectedRequest.bloodGroup})` : ''} required - Select from filtered available inventory`}
               type="info"
               showIcon
             />
             
+            <Card title="Available Blood Units" size="small">
+              {loadingUnits ? (
+                <div className="text-center py-4">
+                  <Spin size="large" />
+                </div>
+              ) : (
+                <Table
+                  size="small"
+                  rowSelection={{
+                    type: 'checkbox',
+                    selectedRowKeys: selectedUnits,
+                    onChange: (selectedRowKeys: React.Key[]) => {
+                      setSelectedUnits(selectedRowKeys as string[]);
+                    },
+                    getCheckboxProps: (record: any) => ({
+                      disabled: selectedUnits.length >= selectedRequest.unitsRequested && !selectedUnits.includes(record.id)
+                    })
+                  }}
+                  columns={[
+                    {
+                      title: 'Unit ID',
+                      dataIndex: 'unitId',
+                      key: 'unitId',
+                      width: 120
+                    },
+                    {
+                      title: 'Blood Group',
+                      dataIndex: 'bloodGroup',
+                      key: 'bloodGroup',
+                      width: 100,
+                      render: (bloodGroup: string) => (
+                        <Tag color="red">{bloodGroup}</Tag>
+                      )
+                    },
+                    {
+                      title: 'Component',
+                      dataIndex: 'component',
+                      key: 'component',
+                      width: 120
+                    },
+                    {
+                      title: 'Volume (ml)',
+                      dataIndex: 'volume',
+                      key: 'volume',
+                      width: 100
+                    },
+                    {
+                      title: 'Expiry Date',
+                      dataIndex: 'expiryDate',
+                      key: 'expiryDate',
+                      width: 120,
+                      render: (date: string) => dayjs(date).format('DD MMM YY')
+                    },
+                    {
+                      title: 'Donor',
+                      key: 'donor',
+                      width: 120,
+                      render: (record: any) => (
+                        record.donor ? `${record.donor.firstName} ${record.donor.lastName}` : 'N/A'
+                      )
+                    }
+                  ]}
+                  dataSource={availableUnits.map(unit => ({ ...unit, key: unit.id }))}
+                  pagination={false}
+                  scroll={{ y: 200 }}
+                />
+              )}
+              <div className="mt-2 text-sm text-gray-500">
+                Selected: {selectedUnits.length} / {selectedRequest.unitsRequested} units
+              </div>
+            </Card>
+            
             <Form layout="vertical" form={issueForm} onFinish={handleIssueBlood}>
               <Form.Item label="Issued By" name="issuedBy" rules={[{ required: true, message: 'Please enter who is issuing the blood' }]}>
                 <Input placeholder="Enter staff name or ID" />
-              </Form.Item>
-
-              <Form.Item label="Delivery Method" name="deliveryMethod" rules={[{ required: true, message: 'Please select delivery method' }]}>
-                <Radio.Group>
-                  <Radio value="Hospital Pickup">Hospital Pickup</Radio>
-                  <Radio value="Courier Service">Courier Service</Radio>
-                  <Radio value="Emergency Transport">Emergency Transport</Radio>
-                </Radio.Group>
               </Form.Item>
 
               <Form.Item label="Notes" name="notes">
@@ -909,8 +1030,19 @@ console.log("distributions", distributions);
               </Form.Item>
 
               <div className="flex justify-end space-x-2">
-                <Button onClick={() => setShowIssueModal(false)} disabled={submitting}>Cancel</Button>
-                <Button type="primary" htmlType="submit" loading={submitting}>Issue Blood Units</Button>
+                <Button onClick={() => {
+                  setShowIssueModal(false);
+                  setSelectedUnits([]);
+                  setAvailableUnits([]);
+                }} disabled={submitting}>Cancel</Button>
+                <Button 
+                  type="primary" 
+                  htmlType="submit" 
+                  loading={submitting}
+                  disabled={selectedUnits.length === 0}
+                >
+                  Issue {selectedUnits.length} Blood Units
+                </Button>
               </div>
             </Form>
           </div>
@@ -957,13 +1089,21 @@ console.log("distributions", distributions);
 
             <Card title="Blood Requirements" size="small">
               <Row gutter={16}>
-                <Col span={12}>
+                <Col span={8}>
                   <div className="text-center">
                     <div className="text-lg font-semibold">{selectedRequest.component}</div>
                     <div className="text-sm text-gray-500">Component</div>
                   </div>
                 </Col>
-                <Col span={12}>
+                <Col span={8}>
+                  <div className="text-center">
+                    <Tag color="red" className="text-lg font-semibold px-3 py-1">
+                      {selectedRequest.bloodGroup || 'Any'}
+                    </Tag>
+                    <div className="text-sm text-gray-500 mt-1">Blood Group</div>
+                  </div>
+                </Col>
+                <Col span={8}>
                   <div className="text-center">
                     <div className="text-lg font-semibold">
                       {selectedRequest.unitsIssued}/{selectedRequest.unitsRequested}

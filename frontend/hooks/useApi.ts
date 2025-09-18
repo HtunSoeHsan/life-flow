@@ -38,9 +38,9 @@ export function useCollections(params?: { hospitalId?: string; status?: string; 
     }
   };
 
-  const updateCollectionStatus = async (id: string, status: string, notes?: string) => {
+  const updateCollectionStatus = async (id: string, status: string, notes?: string, currentStep?: number) => {
     try {
-      const response = await apiService.updateCollectionStatus(id, status, notes, params?.hospitalId);
+      const response = await apiService.updateCollectionStatus(id, status, notes, params?.hospitalId, currentStep);
       await fetchCollections();
       return response;
     } catch (err) {

@@ -75,24 +75,14 @@ export const getCollections = async (req: Request, res: Response) => {
 
 // Test endpoint to debug request body
 export const testEndpoint = async (req: Request, res: Response) => {
-  console.log('=== TEST ENDPOINT ===');
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
-  console.log('Raw body:', req.body);
-  console.log('Body type:', typeof req.body);
-  console.log('Body keys:', Object.keys(req.body || {}));
   res.json({ received: req.body, headers: req.headers });
 };
 
 // Create new collection
 export const createCollection = async (req: Request, res: Response) => {
   try {
-    console.log("req.hospitalId:", req.hospitalId)
-    console.log("req.headerId:",req.headers['x-hospital-id'])
+    
     const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
-    console.log('Hospital ID:', hospitalId);
-    console.log('Request headers:', req.headers);
-    console.log('Request body:', req.body);
     if (!hospitalId) {
       res.status(400).json({ error: 'Hospital ID required' });
       return;
@@ -104,14 +94,12 @@ export const createCollection = async (req: Request, res: Response) => {
     const donor = await tenantClient.donor.findFirst({
       where: { donorId: req.body.donorId }
     });
-    console.log("Found donor:", donor);
     if (!donor) {
       res.status(400).json({ error: 'Donor not found' });
       return;
     }
 
     const collectionDate = req.body.collectionDate ? new Date(req.body.collectionDate) : new Date();
-    console.log("Parsed collection date:", collectionDate);
     if (isNaN(collectionDate.getTime())) {
       res.status(400).json({ error: 'Invalid collection date' });
       return;
@@ -163,7 +151,7 @@ export const updateCollectionStatus = async (req: Request, res: Response) => {
   try {
     const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
     const { collectionId } = req.params;
-    const { status, notes } = req.body;
+    const { status, notes, currentStep } = req.body;
     
     if (!hospitalId) {
       res.status(400).json({ error: 'Hospital ID required' });
@@ -172,12 +160,43 @@ export const updateCollectionStatus = async (req: Request, res: Response) => {
 
     const tenantClient = schemaManager.getTenantClient(hospitalId);
     
+    const updateData: any = {
+      status,
+      notes: notes || null,
+      updatedAt: new Date()
+    };
+    
+    // Always update currentStep if provided, or map from status
+    if (currentStep !== undefined) {
+      updateData.currentStep = currentStep;
+    } else {
+      // Auto-map status to step if currentStep not provided
+      const statusToStepMap: { [key: string]: number } = {
+        'Scheduled': 1,
+        'Pre-Screening': 2, 
+        'Processing': 3,
+        'Quality Check': 4,
+        'Testing': 5,
+        'Completed': 6
+      };
+      
+      if (statusToStepMap[status]) {
+        updateData.currentStep = statusToStepMap[status];
+      }
+    }
+    
     const collection = await tenantClient.collection.update({
       where: { id: collectionId },
-      data: {
-        status,
-        notes: notes || null,
-        updatedAt: new Date()
+      data: updateData,
+      include: {
+        donor: {
+          select: {
+            firstName: true,
+            lastName: true,
+            donorId: true,
+            bloodGroup: true
+          }
+        }
       }
     });
 
@@ -241,12 +260,16 @@ export const completeCollection = async (req: Request, res: Response) => {
     // Create blood unit
     const bloodUnit = await tenantClient.bloodUnit.create({
       data: {
-        ...bloodUnitData,
         donorId: collection.donorId,
         unitId: `BU${Date.now()}`,
         bloodGroup: collection.donor.bloodGroup,
+        component: bloodUnitData.component || 'Whole Blood',
         collectionDate: collection.collectionDate,
         expiryDate,
+        volume: parseFloat(bloodUnitData.volume) || 450,
+        location: bloodUnitData.location || 'Refrigerator-A1',
+        temperature: bloodUnitData.temperature || 4.0,
+        batchNumber: `B${Date.now()}`,
         testResults: {},
         status: 'Available'
       }
@@ -257,6 +280,7 @@ export const completeCollection = async (req: Request, res: Response) => {
       where: { id: collectionId },
       data: {
         status: 'Completed',
+        currentStep: 6,
         updatedAt: new Date()
       }
     });

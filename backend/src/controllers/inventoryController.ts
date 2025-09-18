@@ -15,7 +15,6 @@ export const getInventorySummary = async (req: Request, res: Response) => {
 
     const tenantClient = schemaManager.getTenantClient(hospitalId);
     const bloodUnits = await tenantClient.bloodUnit.findMany();
-    console.log("Fetched blood units:", bloodUnits);
     // Group by blood group
     const summary = bloodUnits.reduce((acc: any, unit: any) => {
       const group = unit.bloodGroup;
@@ -110,8 +109,7 @@ export const getBloodUnits = async (req: Request, res: Response) => {
 export const createBloodUnit = async (req: Request, res: Response) => {
   try {
     const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
-    console.log('Hospital ID:', hospitalId);
-    console.log("req body:", req.body);
+    
     if (!hospitalId) {
       res.status(400).json({ error: 'Hospital ID required' });
       return;
@@ -145,7 +143,6 @@ export const createBloodUnit = async (req: Request, res: Response) => {
     const donor = await tenantClient.donor.findUnique({
       where: { donorId: req.body.donorId }
     });
-    console.log("Found donor:", donor);
     if (!donor) {
       res.status(400).json({ error: 'Donor not found' });
       return;
@@ -179,8 +176,7 @@ export const updateBloodUnitStatus = async (req: Request, res: Response) => {
     const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
     const { unitId } = req.params;
     const { status, notes } = req.body;
-    console.log("Updating status for unit:", unitId, status, notes);
-    console.log('Hospital ID:', hospitalId);
+    
     if (!hospitalId) {
       res.status(400).json({ error: 'Hospital ID required' });
       return;
@@ -214,8 +210,7 @@ export const updateTestResults = async (req: Request, res: Response) => {
     const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
     const { unitId } = req.params;
     const testResults = req.body;
-    console.log("Updating test results for unit:", unitId, testResults);
-    console.log('Hospital ID:', hospitalId);
+    
     if (!hospitalId) {
       res.status(400).json({ error: 'Hospital ID required' });
       return;

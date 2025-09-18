@@ -145,11 +145,12 @@ export class DistributionDAO extends AbstractBaseDAO<Distribution, string> {
   /**
    * Issue distribution (update status and issue date)
    */
-  public async issueDistribution(id: string, approvedBy: string, notes?: string): Promise<Distribution | null> {
+  public async issueDistribution(id: string, approvedBy: string, unitsIssued: number, notes?: string): Promise<Distribution | null> {
     return await this.update(id, {
-      status: 'Issued',
+      status: unitsIssued > 0 ? 'Issued' : 'Requested',
       issueDate: new Date(),
       approvedBy,
+      unitsIssued,
       notes,
       updatedAt: new Date()
     });

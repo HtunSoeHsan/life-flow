@@ -122,12 +122,16 @@ class ApiService {
     });
   }
 
-  async updateCollectionStatus(id: string, status: string, notes?: string, hospitalId?: string) {
+  async updateCollectionStatus(id: string, status: string, notes?: string, hospitalId?: string, currentStep?: number) {
     const headers = hospitalId ? { 'x-hospital-id': hospitalId } : {};
+    const body: any = { status, notes };
+    if (currentStep !== undefined) {
+      body.currentStep = currentStep;
+    }
     return this.request(`/api/collections/${id}/status`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ status, notes }),
+      body: JSON.stringify(body),
     });
   }
 

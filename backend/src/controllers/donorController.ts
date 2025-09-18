@@ -8,8 +8,7 @@ const schemaManager = SchemaManager.getInstance();
 export const registerDonor = async (req: Request, res: Response) => {
   try {
     const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
-    console.log('Hospital ID:', hospitalId);
-    console.log("req body:", req.body);
+    
     if (!hospitalId) {
       res.status(400).json({ error: 'Hospital ID required' });
       return;
@@ -188,8 +187,7 @@ export const updateDonor = async (req: Request, res: Response) => {
   try {
     const hospitalId = req.hospitalId || req.headers['x-hospital-id'] as string;
     const { donorId } = req.params;
-    console.log("Updating donor:", donorId, req.body);
-    console.log('Hospital ID:', hospitalId);
+    
     if (!hospitalId) {
       res.status(400).json({ error: 'Hospital ID required' });
       return;
